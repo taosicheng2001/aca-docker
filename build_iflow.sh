@@ -1,28 +1,67 @@
 #!/bin/bash
-
+# ***************************************************************************************
+# Copyright (c) 2023-2025 Beijing Institute of Open Source Chip
+# Copyright (c) 2023-2025 Institute of Computing Technology, Chinese Academy of Sciences
+# Copyright (c) 2023-2025 Peng Cheng Laboratory
+#
+# iFlow is licensed under Mulan PSL v2.
+# You can use this software according to the terms and conditions of the Mulan PSL v2.
+# You may obtain a copy of Mulan PSL v2 at:
+# http://license.coscl.org.cn/MulanPSL2
+#
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+# EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+# MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+#
+# See the Mulan PSL v2 for more details.
+# ***************************************************************************************
 # env
-export IFLOW_BUILD_THREAD_NUM=$(cat /proc/cpuinfo | grep "processor" | wc -l)
-export IFLOW_ROOT_DIR=/root/iFlow
-export IFLOW_SHELL_DIR=/root/iFlow/scripts/shell
-export IFLOW_TOOLS_DIR=/root/iFlow/tools
+IFLOW_BUILD_THREAD_NUM=$(cat /proc/cpuinfo | grep "processor" | wc -l)
+IFLOW_ROOT_DIR=$(cd "$(dirname "$0")" && pwd)
+IFLOW_SHELL_DIR=$(cd "$(dirname "$0")" && pwd)/scripts/shell
+IFLOW_TOOLS_DIR=$(cd "$(dirname "$0")" && pwd)/tools
 
 if [ $# == "0" ];then
-    export IFLOW_MIRROR_URL="github.com"
+    IFLOW_MIRROR_URL="github.com"
 elif [ $# == "2" ] && [ $1 == "-mirror" ];then
-    export IFLOW_MIRROR_URL=$2
+    IFLOW_MIRROR_URL=$2
 else
     echo "please use './build_flow.sh -mirror <mirror url>' !"
     exit
 fi
 
-git config --global --add safe.directory /root/iFlow
+export IFLOW_BUILD_THREAD_NUM
+export IFLOW_ROOT_DIR
+export IFLOW_SHELL_DIR
+export IFLOW_TOOLS_DIR
+export IFLOW_MIRROR_URL
 
-# update iFlow
-cd $IFLOW_ROOT_DIR
-git pull origin master
+source $IFLOW_SHELL_DIR/common.sh
 
-# install tools
-$IFLOW_SHELL_DIR/install_tools.sh
+RUN_ROOT apt-get update && apt-get install -y cmake klayout tcl-dev libspdlog1
+RUN_ROOT cp -f /usr/include/tcl8.6/*.h /usr/include/
+RUN_ROOT ln -s -f /usr/lib/x86_64-linux-gnu/libtcl8.6.so /usr/lib/x86_64-linux-gnu/libtcl8.5.so
+
+# lemon
+CHECK_DIR /usr/local/include/lemon ||\
+{
+        # RUN wget http://lemon.cs.elte.hu/pub/sources/lemon-1.3.1.tar.gz
+        RUN cd $IFLOW_TOOLS_DIR
+        CHECK_DIR lemon-1.3.1 || RUN tar zxvf lemon-1.3.1.tar.gz
+        RUN cd lemon-1.3.1
+        RUN mkdir -p build
+        RUN cd build
+        RUN cmake ..
+        RUN make -j$IFLOW_BUILD_THREAD_NUM
+        RUN_ROOT make install
+}
+
+# # update iFlow
+# RUN cd $IFLOW_ROOT_DIR
+# RUN git pull origin master
+
+# # install tools
+# RUN $IFLOW_SHELL_DIR/install_tools.sh
 
 # link iEDA lib
 echo 'export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:'$IFLOW_TOOLS_DIR'/iEDA_0.1/lib' >> ~/.bashrc
